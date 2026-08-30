@@ -1,0 +1,29 @@
+name: Build Little Wilds
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GBDK
+        run: |
+          wget -q https://github.com/gbdk-2020/gbdk-2020/releases/download/4.4.0/gbdk-linux64.tar.gz
+          tar -xzf gbdk-linux64.tar.gz
+
+      - name: Build Game Boy ROM
+        run: |
+          mkdir -p build
+          ./gbdk/bin/lcc -msm83:gb -o build/little_wilds.gb src/main.c
+
+      - name: Upload ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: little-wilds-rom
+          path: build/little_wilds.gb
