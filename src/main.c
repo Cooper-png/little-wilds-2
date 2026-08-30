@@ -3,20 +3,26 @@
 
 /*
     LITTLE WILDS
-    ALPHA 2 - STABLE BUILD
+    ALPHA 3
 
     GBDK-2020 4.4.0
     Target: Game Boy
 
-    Controls:
-      D-Pad = Move
-      A     = Talk / Attack
-      B     = Heal in village
+    D-PAD = MOVE
+    A     = TALK / ATTACK
+    B     = HEAL IN VILLAGE / RUN IN BATTLE
 
-    Areas:
-      Bramblewick
-      Meadow of Echoes
-      Whisper Woods
+    AREAS:
+      BRAMBLEWICK
+      MEADOW OF ECHOES
+      WHISPER WOODS
+
+    ALPHA 3:
+      - Slower movement
+      - Light/white world
+      - Expanded woods
+      - Mara story progression
+      - Forest mystery
 */
 
 /* =================================================
@@ -39,10 +45,11 @@
 #define TILE_HOUSE  6
 #define TILE_DOOR   7
 
-#define MON_FENLO   0
-#define MON_MOSSEN  1
-#define MON_ZAPPIT  2
-#define MON_BRINN   3
+#define TILE_PLAYER 8
+#define TILE_MARA   9
+#define TILE_STONE  10
+
+#define MOVE_DELAY 8
 
 /* =================================================
    MONSTER DATA
@@ -107,14 +114,31 @@ UINT8 current_area = AREA_VILLAGE;
 UINT8 player_x = 9;
 UINT8 player_y = 15;
 
+/*
+   Story:
+     0 = first meeting
+     1 = told to investigate meadow
+     2 = meadow discovered
+     3 = Mara warns about woods
+     4 = woods discovered
+     5 = stone discovered
+*/
+
 UINT8 story_step = 0;
+
 UINT8 random_value = 37;
 
 /* =================================================
-   TILES
+   MOVEMENT TIMER
    ================================================= */
 
-const unsigned char tile_data[9 * 16] = {
+UINT8 move_timer = 0;
+
+/* =================================================
+   TILE GRAPHICS
+   ================================================= */
+
+const unsigned char tile_data[11 * 16] = {
 
     /* 0 - GRASS */
     0x00,0x00,
@@ -204,11 +228,31 @@ const unsigned char tile_data[9 * 16] = {
     0xFF,0xFF,
     0x7E,0x7E,
     0x3C,0x3C,
+    0x18,0x18,
+
+    /* 9 - MARA */
+    0x18,0x18,
+    0x3C,0x3C,
+    0x7E,0x7E,
+    0xDB,0xDB,
+    0xFF,0xFF,
+    0x7E,0x7E,
+    0x66,0x66,
+    0x42,0x42,
+
+    /* 10 - MYSTERIOUS STONE */
+    0x18,0x18,
+    0x3C,0x3C,
+    0x7E,0x7E,
+    0xFF,0xFF,
+    0xFF,0xFF,
+    0x7E,0x7E,
+    0x3C,0x3C,
     0x18,0x18
 };
 
 /* =================================================
-   MAP DATA
+   MAPS
    ================================================= */
 
 const unsigned char village_map[MAP_W * MAP_H] = {
@@ -261,6 +305,13 @@ const unsigned char meadow_map[MAP_W * MAP_H] = {
     2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
 };
 
+/*
+   Whisper Woods.
+
+   The central path is deliberately winding.
+   Trees and rocks create several small routes.
+*/
+
 const unsigned char forest_map[MAP_W * MAP_H] = {
 
     2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
@@ -269,15 +320,17 @@ const unsigned char forest_map[MAP_W * MAP_H] = {
     2,0,0,2,0,0,0,2,0,1,1,0,2,0,0,0,2,0,0,2,
     2,0,2,2,0,0,0,0,0,1,1,0,0,0,0,2,2,0,0,2,
     2,0,0,2,0,2,0,0,0,1,1,0,0,2,0,0,2,0,0,2,
-    2,0,0,0,0,0,0,2,0,1,1,0,2,0,0,0,0,0,0,2,
 
+    2,0,0,0,0,0,0,2,0,1,1,0,2,0,0,0,0,0,0,2,
     2,0,2,0,0,0,0,0,0,1,1,0,0,0,0,0,2,0,0,2,
     2,0,0,0,2,0,2,0,0,1,1,0,0,2,0,0,0,0,0,2,
     2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,2,0,0,0,2,
+
     2,0,2,0,0,2,0,0,0,1,1,0,0,0,2,0,0,0,0,2,
     2,0,0,0,0,0,0,2,0,1,1,0,2,0,0,0,0,2,0,2,
     2,0,0,2,0,0,0,0,0,1,1,0,0,0,2,0,0,0,0,2,
     2,0,0,0,0,2,0,0,0,1,1,0,0,0,0,0,2,0,0,2,
+
     2,0,2,0,0,0,0,0,0,1,1,0,0,2,0,0,0,0,0,2,
     2,0,0,0,0,0,2,0,0,1,1,0,0,0,0,2,0,0,0,2,
     2,0,0,2,0,0,0,0,0,1,1,0,0,0,2,0,0,0,0,2,
@@ -291,12 +344,14 @@ const unsigned char forest_map[MAP_W * MAP_H] = {
    ================================================= */
 
 void sound_init(void) {
+
     NR52_REG = 0x80;
     NR50_REG = 0x77;
     NR51_REG = 0xFF;
 }
 
 void sound_move(void) {
+
     NR21_REG = 0x80;
     NR22_REG = 0xF2;
     NR23_REG = 0x90;
@@ -304,10 +359,24 @@ void sound_move(void) {
 }
 
 void sound_hit(void) {
+
     NR41_REG = 0x08;
     NR42_REG = 0xF3;
     NR43_REG = 0x25;
     NR44_REG = 0xC0;
+}
+
+void sound_story(void) {
+
+    NR21_REG = 0x80;
+    NR22_REG = 0xF2;
+    NR23_REG = 0xB0;
+    NR24_REG = 0x86;
+
+    delay(35);
+
+    NR23_REG = 0xD0;
+    NR24_REG = 0x86;
 }
 
 /* =================================================
@@ -330,7 +399,7 @@ UINT8 random_number(void) {
 }
 
 /* =================================================
-   MAP FUNCTIONS
+   MAP HELPERS
    ================================================= */
 
 const unsigned char *get_map(void) {
@@ -361,6 +430,30 @@ UINT8 get_tile(UINT8 x, UINT8 y) {
     ];
 }
 
+/*
+   NPC / landmark collision.
+*/
+
+UINT8 special_blocked(
+    UINT8 x,
+    UINT8 y
+) {
+
+    if(current_area == AREA_VILLAGE) {
+
+        if(x == 10 && y == 5)
+            return 1;
+    }
+
+    if(current_area == AREA_FOREST) {
+
+        if(x == 14 && y == 8)
+            return 1;
+    }
+
+    return 0;
+}
+
 UINT8 blocked(UINT8 tile) {
 
     if(tile == TILE_TREE)
@@ -382,6 +475,35 @@ UINT8 blocked(UINT8 tile) {
    DRAWING
    ================================================= */
 
+void draw_specials(void) {
+
+    /*
+       Mara stands beside the village path.
+    */
+
+    if(current_area == AREA_VILLAGE) {
+
+        set_bkg_tile_xy(
+            10,
+            5,
+            TILE_MARA
+        );
+    }
+
+    /*
+       The mysterious stone sits in the woods.
+    */
+
+    if(current_area == AREA_FOREST) {
+
+        set_bkg_tile_xy(
+            14,
+            8,
+            TILE_STONE
+        );
+    }
+}
+
 void draw_map(void) {
 
     set_bkg_tiles(
@@ -391,6 +513,8 @@ void draw_map(void) {
         MAP_H,
         get_map()
     );
+
+    draw_specials();
 }
 
 void draw_player(void) {
@@ -398,13 +522,9 @@ void draw_player(void) {
     set_bkg_tile_xy(
         player_x,
         player_y,
-        8
+        TILE_PLAYER
     );
 }
-
-/*
-   Redraw the tile underneath the player.
-*/
 
 void redraw_player_tile(
     UINT8 old_x,
@@ -414,8 +534,13 @@ void redraw_player_tile(
     set_bkg_tile_xy(
         old_x,
         old_y,
-        get_tile(old_x, old_y)
+        get_tile(
+            old_x,
+            old_y
+        )
     );
+
+    draw_specials();
 
     draw_player();
 }
@@ -622,7 +747,10 @@ void encounter(void) {
     UINT8 tile;
     UINT8 roll;
 
-    if(current_area != AREA_MEADOW)
+    if(
+        current_area != AREA_MEADOW &&
+        current_area != AREA_FOREST
+    )
         return;
 
     tile =
@@ -640,23 +768,196 @@ void encounter(void) {
     if(roll != 0)
         return;
 
-    if(random_number() & 1) {
+    if(current_area == AREA_FOREST) {
 
-        wild_mossen.hp =
-            wild_mossen.max_hp;
+        wild_brinn.hp =
+            wild_brinn.max_hp;
 
-        battle(&wild_mossen);
+        battle(
+            &wild_brinn
+        );
 
     } else {
 
-        wild_zappit.hp =
-            wild_zappit.max_hp;
+        if(random_number() & 1) {
 
-        battle(&wild_zappit);
+            wild_mossen.hp =
+                wild_mossen.max_hp;
+
+            battle(
+                &wild_mossen
+            );
+
+        } else {
+
+            wild_zappit.hp =
+                wild_zappit.max_hp;
+
+            battle(
+                &wild_zappit
+            );
+        }
     }
 
     draw_map();
     draw_player();
+}
+
+/* =================================================
+   STORY
+   ================================================= */
+
+void mara_story(void) {
+
+    if(current_area != AREA_VILLAGE)
+        return;
+
+    /*
+       First meeting.
+    */
+
+    if(story_step == 0) {
+
+        story_step = 1;
+
+        sound_story();
+
+        message(
+            "MARA: YOU'RE FINALLY AWAKE."
+        );
+
+        message(
+            "MARA: THE MEADOW HAS BEEN"
+        );
+
+        message(
+            "MARA: ACTING STRANGE LATELY."
+        );
+
+        message(
+            "MARA: GO TAKE A LOOK."
+        );
+
+        return;
+    }
+
+    /*
+       Player has visited the meadow.
+    */
+
+    if(story_step == 2) {
+
+        story_step = 3;
+
+        sound_story();
+
+        message(
+            "MARA: YOU HEARD IT TOO?"
+        );
+
+        message(
+            "MARA: THAT SOUND?"
+        );
+
+        message(
+            "MARA: IT COMES FROM THE WOODS."
+        );
+
+        message(
+            "MARA: DON'T GO TOO DEEP."
+        );
+
+        return;
+    }
+
+    /*
+       Player has reached the woods.
+    */
+
+    if(story_step == 4) {
+
+        story_step = 5;
+
+        sound_story();
+
+        message(
+            "MARA: YOU FOUND THE STONE..."
+        );
+
+        message(
+            "MARA: I WAS HOPING YOU WOULDN'T."
+        );
+
+        message(
+            "MARA: MY MOTHER WARNED ME"
+        );
+
+        message(
+            "MARA: NEVER TO WAKE WHAT'S"
+        );
+
+        message(
+            "MARA: SLEEPING UNDER THE WOODS."
+        );
+
+        return;
+    }
+
+    message(
+        "MARA: SOMETHING IS WATCHING."
+    );
+}
+
+/* =================================================
+   STONE STORY
+   ================================================= */
+
+void stone_interaction(void) {
+
+    if(current_area != AREA_FOREST)
+        return;
+
+    if(player_x == 14 &&
+       player_y == 9) {
+
+        if(story_step == 3) {
+
+            story_step = 4;
+
+            sound_story();
+
+            message(
+                "THE STONE IS COLD."
+            );
+
+            message(
+                "YOU HEAR A FAINT HUM."
+            );
+
+            message(
+                "THE SOUND FEELS FAMILIAR."
+            );
+
+            message(
+                "SOMETHING MOVES DEEP BELOW."
+            );
+
+            return;
+        }
+
+        if(story_step >= 4) {
+
+            message(
+                "THE STONE IS HUMMING."
+            );
+
+            return;
+        }
+
+        message(
+            "AN OLD STONE."
+        );
+    }
 }
 
 /* =================================================
@@ -667,15 +968,20 @@ void transition_area(void) {
 
     if(current_area == AREA_VILLAGE) {
 
-        if(player_y == 17 &&
-           player_x >= 9 &&
-           player_x <= 10) {
+        if(
+            player_y == 17 &&
+            player_x >= 9 &&
+            player_x <= 10
+        ) {
 
             current_area =
                 AREA_MEADOW;
 
             player_x = 9;
             player_y = 1;
+
+            if(story_step == 1)
+                story_step = 2;
 
             draw_map();
             draw_player();
@@ -690,9 +996,11 @@ void transition_area(void) {
 
     if(current_area == AREA_MEADOW) {
 
-        if(player_y == 0 &&
-           player_x >= 9 &&
-           player_x <= 10) {
+        if(
+            player_y == 0 &&
+            player_x >= 9 &&
+            player_x <= 10
+        ) {
 
             current_area =
                 AREA_VILLAGE;
@@ -706,15 +1014,20 @@ void transition_area(void) {
             return;
         }
 
-        if(player_y == 17 &&
-           player_x >= 9 &&
-           player_x <= 10) {
+        if(
+            player_y == 17 &&
+            player_x >= 9 &&
+            player_x <= 10
+        ) {
 
             current_area =
                 AREA_FOREST;
 
             player_x = 9;
             player_y = 1;
+
+            if(story_step == 3)
+                story_step = 4;
 
             draw_map();
             draw_player();
@@ -729,9 +1042,11 @@ void transition_area(void) {
 
     if(current_area == AREA_FOREST) {
 
-        if(player_y == 0 &&
-           player_x >= 9 &&
-           player_x <= 10) {
+        if(
+            player_y == 0 &&
+            player_x >= 9 &&
+            player_x <= 10
+        ) {
 
             current_area =
                 AREA_MEADOW;
@@ -784,11 +1099,6 @@ void move_player(UINT8 keys) {
     else
         return;
 
-    /*
-       Allow the player to stand on the
-       transition border.
-    */
-
     if(new_x < 0 ||
        new_x >= MAP_W)
         return;
@@ -802,6 +1112,12 @@ void move_player(UINT8 keys) {
             (UINT8)new_x,
             (UINT8)new_y
         )
+    ))
+        return;
+
+    if(special_blocked(
+        (UINT8)new_x,
+        (UINT8)new_y
     ))
         return;
 
@@ -824,55 +1140,51 @@ void move_player(UINT8 keys) {
 }
 
 /* =================================================
-   VILLAGE INTERACTION
+   INTERACTION
    ================================================= */
 
-void village_interaction(void) {
-
-    if(current_area != AREA_VILLAGE)
-        return;
+void interaction(void) {
 
     /*
-       House healing area.
+       Mara is at 10,5.
+       Talk when standing directly below her.
     */
 
-    if(player_x >= 5 &&
-       player_x <= 7 &&
-       player_y >= 2 &&
-       player_y <= 4) {
+    if(current_area == AREA_VILLAGE) {
 
-        player_mon.hp =
-            player_mon.max_hp;
+        if(
+            player_x == 10 &&
+            player_y == 6
+        ) {
 
-        message(
-            "FENLO IS FULLY HEALED."
-        );
+            mara_story();
 
-        return;
+            return;
+        }
+
+        /*
+           House / healing.
+        */
+
+        if(
+            player_x >= 5 &&
+            player_x <= 7 &&
+            player_y >= 2 &&
+            player_y <= 4
+        ) {
+
+            player_mon.hp =
+                player_mon.max_hp;
+
+            message(
+                "FENLO IS FULLY HEALED."
+            );
+
+            return;
+        }
     }
 
-    if(story_step == 0) {
-
-        story_step = 1;
-
-        message(
-            "MARA: THE MEADOW IS QUIET."
-        );
-
-        message(
-            "MARA: TOO QUIET."
-        );
-
-        message(
-            "MARA: BE CAREFUL OUT THERE."
-        );
-
-        return;
-    }
-
-    message(
-        "MARA: STAY SAFE."
-    );
+    stone_interaction();
 }
 
 /* =================================================
@@ -886,7 +1198,7 @@ void title_screen(void) {
     printf("\n\n");
     printf(" A TINY MONSTER RPG");
     printf("\n\n");
-    printf("       ALPHA 2");
+    printf("       ALPHA 3");
     printf("\n\n");
     printf("      PRESS A");
 
@@ -907,16 +1219,23 @@ void main(void) {
 
     set_bkg_data(
         0,
-        9,
+        11,
         tile_data
     );
 
+    /*
+       Light Game Boy palette.
+
+       Tile 0 / background becomes white.
+       Darker tile patterns remain visible.
+    */
+
     BGP_REG =
         DMG_PALETTE(
-            DMG_BLACK,
-            DMG_DARK_GRAY,
+            DMG_WHITE,
             DMG_LITE_GRAY,
-            DMG_WHITE
+            DMG_DARK_GRAY,
+            DMG_BLACK
         );
 
     title_screen();
@@ -933,14 +1252,22 @@ void main(void) {
         keys =
             joypad();
 
+        /*
+           A is interaction.
+        */
+
         if(keys & J_A) {
 
             waitpadup();
 
-            village_interaction();
+            interaction();
 
             continue;
         }
+
+        /*
+           B heals in village.
+        */
 
         if(keys & J_B) {
 
@@ -959,6 +1286,30 @@ void main(void) {
             continue;
         }
 
-        move_player(keys);
+        /*
+           Movement cooldown.
+           This prevents the previous
+           extremely fast movement.
+        */
+
+        if(move_timer > 0) {
+
+            move_timer--;
+
+        } else {
+
+            if(
+                keys & J_UP ||
+                keys & J_DOWN ||
+                keys & J_LEFT ||
+                keys & J_RIGHT
+            ) {
+
+                move_player(keys);
+
+                move_timer =
+                    MOVE_DELAY;
+            }
+        }
     }
 }
