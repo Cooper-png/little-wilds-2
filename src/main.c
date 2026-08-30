@@ -1,31 +1,18 @@
 #include <gb/gb.h>
 #include <stdio.h>
+#include <stdint.h>
 
 /*
     LITTLE WILDS
-    Expanded Game Boy RPG
-    Target: GBDK
+    Compact Game Boy RPG
+    GBDK 4.4 compatible
 
     Controls:
-      D-PAD = Move
-      A     = Interact / Select
-      B     = Menu / Back
-
-    Progression:
-      Bramblewick
-          |
-       Meadow
-          |
-       Forest
-          |
-        Mine
-          |
-        Ruins
-          |
-       Shrine
-
-    The game is deliberately compact so we can spend ROM
-    on gameplay rather than enormous amounts of duplicated code.
+      D-PAD : Move
+      A     : Interact / Attack
+      B     : Menu / Run
+      UP    : Party
+      DOWN  : Status
 */
 
 #define MAP_W 20
@@ -38,17 +25,16 @@
 #define RUINS   4
 #define SHRINE  5
 
-#define TILE_GRASS  0
-#define TILE_PATH   1
-#define TILE_TREE   2
-#define TILE_WATER  3
-#define TILE_FLOWER 4
-#define TILE_TALL   5
-#define TILE_HOUSE  6
-#define TILE_ROCK   7
-#define TILE_DOOR   8
-#define TILE_CAVE   9
-#define TILE_SIGN   10
+#define GRASS  0
+#define PATH   1
+#define TREE   2
+#define WATER  3
+#define FLOWER 4
+#define TALL   5
+#define HOUSE  6
+#define ROCK   7
+#define CAVE   9
+#define SIGN   10
 
 #define MOVE_STRIKE 0
 #define MOVE_GUARD  1
@@ -59,37 +45,33 @@
 #define MOVE_CRUSH  6
 #define MOVE_GLOW   7
 
-#define MAX_MONSTERS 12
 #define PARTY_SIZE 3
-
-#define ITEM_POTION 0
-#define ITEM_BALL   1
-#define ITEM_HERB   2
+#define MAX_MONSTERS 12
 
 typedef struct {
     const char *name;
-    UINT8 hp;
-    UINT8 max_hp;
-    UINT8 atk;
-    UINT8 def;
-    UINT8 spd;
-    UINT8 level;
-    UINT8 xp;
-    UINT8 move1;
-    UINT8 move2;
-    UINT8 owned;
-} Monster;
-
-typedef struct {
-    const char *name;
-    UINT8 power;
+    uint8_t power;
 } Move;
+
+typedef struct {
+    const char *name;
+    uint8_t hp;
+    uint8_t max_hp;
+    uint8_t atk;
+    uint8_t def;
+    uint8_t spd;
+    uint8_t level;
+    uint8_t xp;
+    uint8_t move1;
+    uint8_t move2;
+    uint8_t owned;
+} Monster;
 
 /* -------------------------------------------------
    MOVES
    ------------------------------------------------- */
 
-const Move move_data[8] = {
+const Move moves[8] = {
     {"STRIKE", 6},
     {"GUARD",  0},
     {"BITE",   7},
@@ -104,374 +86,245 @@ const Move move_data[8] = {
    MONSTERS
    ------------------------------------------------- */
 
-Monster monsters[MAX_MONSTERS] = {
-
-    /* name      hp max atk def spd lv xp m1 m2 owned */
-
-    {"FENLO",    24,24, 7,5,7, 3,0,
-        MOVE_STRIKE,MOVE_GUARD,1},
-
-    {"MOSSEN",   20,20, 6,7,4, 2,0,
-        MOVE_VINE,MOVE_GUARD,0},
-
-    {"ZAPPIT",   18,18, 8,3,9, 3,0,
-        MOVE_SPARK,MOVE_BITE,0},
-
-    {"BRINN",    14,14, 5,3,6, 2,0,
-        MOVE_BITE,MOVE_GUARD,0},
-
-    {"MOSSEL",   18,18, 5,6,3, 2,0,
-        MOVE_VINE,MOVE_GUARD,0},
-
-    {"RILL",     22,22, 7,6,5, 3,0,
-        MOVE_STRIKE,MOVE_WIND,0},
-
-    {"GRUFF",    28,28, 8,7,2, 4,0,
-        MOVE_BITE,MOVE_CRUSH,0},
-
-    {"EMBERN",   17,17, 9,3,8, 4,0,
-        MOVE_SPARK,MOVE_STRIKE,0},
-
-    {"THORN",    25,25, 7,8,4, 4,0,
-        MOVE_VINE,MOVE_CRUSH,0},
-
-    {"WISP",     20,20,10,4,10,5,0,
-        MOVE_GLOW,MOVE_WIND,0},
-
-    {"BRAMBLE",  32,32,11,9,5, 6,0,
-        MOVE_VINE,MOVE_CRUSH,0},
-
-    {"ECHO",     38,38,12,10,12,7,0,
-        MOVE_GLOW,MOVE_SPARK,0}
+Monster mons[MAX_MONSTERS] = {
+    {"FENLO",   24,24,7,5,7,3,0,MOVE_STRIKE,MOVE_GUARD,1},
+    {"MOSSEN",  20,20,6,7,4,2,0,MOVE_VINE,MOVE_GUARD,0},
+    {"ZAPPIT",  18,18,8,3,9,3,0,MOVE_SPARK,MOVE_BITE,0},
+    {"BRINN",   14,14,5,3,6,2,0,MOVE_BITE,MOVE_GUARD,0},
+    {"MOSSEL",  18,18,5,6,3,2,0,MOVE_VINE,MOVE_GUARD,0},
+    {"RILL",    22,22,7,6,5,3,0,MOVE_STRIKE,MOVE_WIND,0},
+    {"GRUFF",   28,28,8,7,2,4,0,MOVE_BITE,MOVE_CRUSH,0},
+    {"EMBERN",  17,17,9,3,8,4,0,MOVE_SPARK,MOVE_STRIKE,0},
+    {"THORN",   25,25,7,8,4,4,0,MOVE_VINE,MOVE_CRUSH,0},
+    {"WISP",    20,20,10,4,10,5,0,MOVE_GLOW,MOVE_WIND,0},
+    {"BRAMBLE", 32,32,11,9,5,6,0,MOVE_VINE,MOVE_CRUSH,0},
+    {"ECHO",    38,38,12,10,12,7,0,MOVE_GLOW,MOVE_SPARK,0}
 };
 
 /* -------------------------------------------------
-   SIMPLE TILE GRAPHICS
+   MAPS
    ------------------------------------------------- */
 
-const unsigned char tiles[11][16] = {
+/*
+   IMPORTANT:
+   Maps are stored as uint8_t arrays.
+   They are copied into VRAM with set_bkg_tiles().
+*/
 
-    /* grass */
-    {
-        0x00,0x00,0x00,0x00,
-        0x00,0x00,0x00,0x00,
-        0x00,0x00,0x00,0x00,
-        0x00,0x00,0x00,0x00
-    },
-
-    /* path */
-    {
-        0x55,0x55,0x55,0x55,
-        0x55,0x55,0x55,0x55,
-        0x55,0x55,0x55,0x55,
-        0x55,0x55,0x55,0x55
-    },
-
-    /* tree */
-    {
-        0x18,0x18,0x3C,0x3C,
-        0x7E,0x7E,0xFF,0xFF,
-        0xFF,0xFF,0x7E,0x7E,
-        0x3C,0x3C,0x18,0x18
-    },
-
-    /* water */
-    {
-        0xAA,0x55,0xAA,0x55,
-        0x55,0xAA,0x55,0xAA,
-        0xAA,0x55,0xAA,0x55,
-        0x55,0xAA,0x55,0xAA
-    },
-
-    /* flower */
-    {
-        0x00,0x18,0x18,0x3C,
-        0x3C,0x18,0x18,0x00,
-        0x00,0x18,0x18,0x3C,
-        0x3C,0x18,0x18,0x00
-    },
-
-    /* tall grass */
-    {
-        0x11,0x11,0x22,0x22,
-        0x11,0x11,0x22,0x22,
-        0x11,0x11,0x22,0x22,
-        0x11,0x11,0x22,0x22
-    },
-
-    /* house */
-    {
-        0xFF,0xFF,0x81,0x81,
-        0xBD,0xBD,0xA5,0xA5,
-        0xBD,0xBD,0x81,0x81,
-        0xFF,0xFF,0xFF,0xFF
-    },
-
-    /* rock */
-    {
-        0x00,0x00,0x18,0x18,
-        0x3C,0x3C,0x7E,0x7E,
-        0x7E,0x7E,0x3C,0x3C,
-        0x18,0x18,0x00,0x00
-    },
-
-    /* door */
-    {
-        0xFF,0xFF,0x81,0x81,
-        0x99,0x99,0x99,0x99,
-        0x99,0x99,0x99,0x99,
-        0x81,0x81,0xFF,0xFF
-    },
-
-    /* cave */
-    {
-        0xFF,0xFF,0xAA,0xAA,
-        0x55,0x55,0xFF,0xFF,
-        0xAA,0xAA,0x55,0x55,
-        0xFF,0xFF,0xAA,0xAA
-    },
-
-    /* sign */
-    {
-        0x00,0x18,0x18,0x18,
-        0x3C,0x3C,0x7E,0x7E,
-        0x7E,0x7E,0x3C,0x3C,
-        0x18,0x18,0x18,0x00
-    }
+const uint8_t village_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,6,6,6,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,6,8,6,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,6,6,6,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
 };
 
-/* -------------------------------------------------
-   SPRITES
-   ------------------------------------------------- */
-
-const unsigned char player_sprite[16] = {
-    0x18,0x18,
-    0x3C,0x3C,
-    0x7E,0x7E,
-    0xDB,0xFF,
-    0xFF,0xDB,
-    0x7E,0x7E,
-    0x3C,0x3C,
-    0x24,0x24
+const uint8_t meadow_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,0,0,5,5,5,0,0,0,1,1,0,0,0,5,5,5,0,0,2,
+    2,0,5,5,5,5,0,0,0,1,1,0,0,5,5,5,5,0,0,2,
+    2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
+    2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
+    2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
+    2,0,5,5,5,5,0,0,0,1,1,0,0,5,5,5,5,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
 };
 
-const unsigned char npc_sprite[16] = {
-    0x3C,0x3C,
-    0x42,0x42,
-    0xA5,0xA5,
-    0x81,0x81,
-    0x7E,0x7E,
-    0x18,0x18,
-    0x24,0x24,
-    0x42,0x42
+const uint8_t forest_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,2,0,0,5,0,0,2,2,1,1,2,2,0,0,5,0,0,2,2,
+    2,0,0,5,5,5,0,0,2,1,1,2,0,0,5,5,5,0,0,2,
+    2,0,5,5,0,5,5,0,0,1,1,0,0,5,5,0,5,5,0,2,
+    2,0,5,0,0,0,5,0,0,1,1,0,0,5,0,0,0,5,0,2,
+    2,0,5,0,7,0,5,0,0,1,1,0,0,5,0,7,0,5,0,2,
+    2,0,5,5,5,5,5,0,0,1,1,0,0,5,5,5,5,5,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,0,0,5,0,0,2,2,1,1,2,2,0,0,5,0,0,2,2,
+    2,0,0,5,5,5,0,0,2,1,1,2,0,0,5,5,5,0,0,2,
+    2,0,5,5,0,5,5,0,0,1,1,0,0,5,5,0,5,5,0,2,
+    2,0,5,0,0,0,5,0,0,1,1,0,0,5,0,0,0,5,0,2,
+    2,0,5,0,7,0,5,0,0,1,1,0,0,5,0,7,0,5,0,2,
+    2,0,5,5,5,5,5,0,0,1,1,0,0,5,5,5,5,5,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
+};
+
+const uint8_t mine_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,7,9,9,9,9,9,1,1,9,9,9,7,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,7,9,9,9,9,7,9,1,1,9,9,9,9,9,7,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,9,9,7,9,9,9,1,1,9,9,7,9,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,7,9,9,9,9,9,1,1,9,9,9,7,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,7,9,9,9,9,7,9,1,1,9,9,9,9,9,7,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,9,9,7,9,9,9,1,1,9,9,7,9,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
+};
+
+const uint8_t ruins_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,0,0,0,7,0,0,0,0,1,1,0,0,0,7,0,0,0,0,2,
+    2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,7,0,0,7,0,0,1,1,0,0,0,7,0,0,7,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,7,0,0,7,0,0,1,1,0,0,0,7,0,0,7,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
+};
+
+const uint8_t shrine_map[MAP_W * MAP_H] = {
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,7,0,0,0,1,1,0,0,0,7,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
 };
 
 /* -------------------------------------------------
    GAME STATE
    ------------------------------------------------- */
 
-UINT8 area = VILLAGE;
+uint8_t area = VILLAGE;
+uint8_t player_x = 9;
+uint8_t player_y = 15;
 
-UINT8 player_x = 9;
-UINT8 player_y = 15;
+uint8_t story = 0;
+uint8_t steps = 0;
 
-UINT8 story = 0;
-UINT8 flags = 0;
+uint8_t party[PARTY_SIZE] = {0,255,255};
+uint8_t party_count = 1;
 
-UINT8 party[PARTY_SIZE] = {0,255,255};
-UINT8 party_count = 1;
+uint8_t potions = 3;
+uint8_t balls = 6;
 
-UINT8 potions = 3;
-UINT8 balls = 6;
-UINT8 herbs = 2;
-
-UINT8 steps = 0;
-
-UINT8 battle_enemy = 0;
-UINT8 battle_enemy_hp = 0;
-UINT8 battle_player_hp = 0;
-
-UINT8 guarding = 0;
+uint8_t battle_enemy;
+uint8_t battle_enemy_hp;
+uint8_t battle_player_hp;
+uint8_t guarding;
 
 /* -------------------------------------------------
-   MAP DATA
-
-   The maps deliberately share a lot of structure.
-   This keeps the ROM much smaller than storing
-   huge independent maps.
+   BASIC UI
    ------------------------------------------------- */
 
-const unsigned char maps[6][MAP_W * MAP_H] = {
-
-    /* VILLAGE */
-    {
-        2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,6,6,6,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,6,8,6,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,6,6,6,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
-    },
-
-    /* MEADOW */
-    {
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
-        2,0,0,5,5,5,0,0,0,1,1,0,0,0,5,5,5,0,0,2,
-        2,0,5,5,5,5,0,0,0,1,1,0,0,5,5,5,5,0,0,2,
-        2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
-        2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
-        2,0,5,0,0,5,0,0,0,1,1,0,0,5,0,0,5,0,0,2,
-        2,0,5,5,5,5,0,0,0,1,1,0,0,5,5,5,5,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
-    },
-
-    /* FOREST */
-    {
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
-        2,2,0,0,5,0,0,2,2,1,1,2,2,0,0,5,0,0,2,2,
-        2,0,0,5,5,5,0,0,2,1,1,2,0,0,5,5,5,0,0,2,
-        2,0,5,5,0,5,5,0,0,1,1,0,0,5,5,0,5,5,0,2,
-        2,0,5,0,0,0,5,0,0,1,1,0,0,5,0,0,0,5,0,2,
-        2,0,5,0,7,0,5,0,0,1,1,0,0,5,0,7,0,5,0,2,
-        2,0,5,5,5,5,5,0,0,1,1,0,0,5,5,5,5,5,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,0,0,5,0,0,2,2,1,1,2,2,0,0,5,0,0,2,2,
-        2,0,0,5,5,5,0,0,2,1,1,2,0,0,5,5,5,0,0,2,
-        2,0,5,5,0,5,5,0,0,1,1,0,0,5,5,0,5,5,0,2,
-        2,0,5,0,0,0,5,0,0,1,1,0,0,5,0,0,0,5,0,2,
-        2,0,5,0,7,0,5,0,0,1,1,0,0,5,0,7,0,5,0,2,
-        2,0,5,5,5,5,5,0,0,1,1,0,0,5,5,5,5,5,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
-    },
-
-    /* MINE */
-    {
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,7,9,9,9,9,9,1,1,9,9,9,7,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,7,9,9,9,9,7,9,1,1,9,9,9,9,9,7,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,9,9,7,9,9,9,1,1,9,9,7,9,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,7,9,9,9,9,9,1,1,9,9,9,7,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,7,9,9,9,9,7,9,1,1,9,9,9,9,9,7,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,9,9,7,9,9,9,1,1,9,9,7,9,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,9,9,9,9,9,9,9,9,1,1,9,9,9,9,9,9,9,9,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
-    },
-
-    /* RUINS */
-    {
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
-        2,0,0,0,7,0,0,0,0,1,1,0,0,0,7,0,0,0,0,2,
-        2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,7,0,0,7,0,0,1,1,0,0,0,7,0,0,7,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,7,0,0,7,0,0,1,1,0,0,0,7,0,0,7,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,7,0,0,0,7,0,0,1,1,0,0,7,0,0,7,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
-    },
-
-    /* SHRINE */
-    {
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,7,0,0,0,1,1,0,0,0,7,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2,
-        2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2
+void wait_a(void) {
+    while(!(joypad() & J_A)) {
+        vsync();
     }
-};
 
-/* -------------------------------------------------
-   TEXT HELPERS
-   ------------------------------------------------- */
-
-void wait_a(void)
-{
-    waitpad(J_A);
     waitpadup();
 }
 
-void pause_text(void)
-{
+void clear_screen(void) {
+    fill_bkg_rect(0,0,20,18,0);
+}
+
+void pause_text(void) {
     printf("\n\nA: CONTINUE");
     wait_a();
 }
 
-void message(const char *a, const char *b)
-{
-    cls();
+void message(const char *line1, const char *line2) {
+    clear_screen();
 
-    printf("\n%s", a);
+    printf("\n%s",line1);
 
-    if(b)
-        printf("\n\n%s", b);
+    if(line2)
+        printf("\n\n%s",line2);
 
     pause_text();
 }
 
 /* -------------------------------------------------
-   AREA NAMES
+   MAP ACCESS
    ------------------------------------------------- */
 
-const char *area_name(void)
-{
-    switch(area)
-    {
+const uint8_t *current_map(void) {
+    switch(area) {
+        case VILLAGE: return village_map;
+        case MEADOW:  return meadow_map;
+        case FOREST:  return forest_map;
+        case MINE:    return mine_map;
+        case RUINS:   return ruins_map;
+        default:      return shrine_map;
+    }
+}
+
+uint8_t tile_at(uint8_t x, uint8_t y) {
+    if(x >= MAP_W || y >= MAP_H)
+        return TREE;
+
+    return current_map()[(uint16_t)y * MAP_W + x];
+}
+
+uint8_t blocked(uint8_t tile) {
+    if(tile == TREE)  return 1;
+    if(tile == WATER) return 1;
+    if(tile == HOUSE) return 1;
+    if(tile == ROCK)  return 1;
+    if(tile == CAVE)  return 1;
+
+    return 0;
+}
+
+const char *area_name(void) {
+    switch(area) {
         case VILLAGE: return "BRAMBLEWICK";
         case MEADOW:  return "MEADOW";
         case FOREST:  return "WHISPER FOREST";
@@ -482,98 +335,88 @@ const char *area_name(void)
 }
 
 /* -------------------------------------------------
-   MAP FUNCTIONS
+   GRAPHICS
    ------------------------------------------------- */
 
-const unsigned char *get_map(void)
-{
-    return maps[area];
+const uint8_t player_tile[16] = {
+    0x18,0x18,
+    0x3C,0x3C,
+    0x7E,0x7E,
+    0xDB,0xFF,
+    0xFF,0xDB,
+    0x7E,0x7E,
+    0x3C,0x3C,
+    0x24,0x24
+};
+
+const uint8_t npc_tile[16] = {
+    0x3C,0x3C,
+    0x42,0x42,
+    0xA5,0xA5,
+    0x81,0x81,
+    0x7E,0x7E,
+    0x18,0x18,
+    0x24,0x24,
+    0x42,0x42
+};
+
+void graphics_init(void) {
+    set_sprite_data(0,1,player_tile);
+    set_sprite_data(1,1,npc_tile);
+
+    set_sprite_tile(0,0);
+    set_sprite_tile(1,1);
+
+    SHOW_BKG;
+    SHOW_SPRITES;
 }
 
-UINT8 tile_at(UINT8 x, UINT8 y)
-{
-    if(x >= MAP_W || y >= MAP_H)
-        return TILE_TREE;
-
-    return get_map()[(UINT16)y * MAP_W + x];
-}
-
-UINT8 blocked(UINT8 tile)
-{
-    if(tile == TILE_TREE)
-        return 1;
-
-    if(tile == TILE_WATER)
-        return 1;
-
-    if(tile == TILE_HOUSE)
-        return 1;
-
-    if(tile == TILE_ROCK)
-        return 1;
-
-    if(tile == TILE_CAVE)
-        return 1;
-
-    return 0;
-}
-
-void show_player(void)
-{
+void draw_player(void) {
     move_sprite(
         0,
-        (player_x << 3) + 4,
-        (player_y << 3) + 12
+        (player_x << 3) + 8,
+        (player_y << 3) + 16
     );
 }
 
-void hide_npc(void)
-{
-    move_sprite(1,0,0);
-}
+void draw_map(void) {
+    const uint8_t *map = current_map();
 
-void draw_map(void)
-{
     set_bkg_tiles(
         0,
         0,
         MAP_W,
         MAP_H,
-        get_map()
+        map
     );
 
-    show_player();
-    hide_npc();
+    draw_player();
 
-    if(area == VILLAGE)
-        move_sprite(1,52,44);
+    move_sprite(1,0,0);
 }
 
 /* -------------------------------------------------
    PARTY
    ------------------------------------------------- */
 
-Monster *lead_monster(void)
-{
-    return &monsters[party[0]];
+Monster *lead(void) {
+    return &mons[party[0]];
 }
 
-void heal_lead(void)
-{
-    Monster *m = lead_monster();
+void heal_party(void) {
+    uint8_t i;
 
-    m->hp = m->max_hp;
-    battle_player_hp = m->max_hp;
+    for(i=0;i<party_count;i++)
+        mons[party[i]].hp =
+            mons[party[i]].max_hp;
 }
 
-void add_xp(UINT8 amount)
-{
-    Monster *m = lead_monster();
+void give_xp(uint8_t amount) {
+    Monster *m = lead();
 
     m->xp += amount;
 
-    if(m->xp >= 10)
-    {
+    if(m->xp >= 10) {
         m->xp -= 10;
 
         m->level++;
@@ -595,37 +438,19 @@ void add_xp(UINT8 amount)
    AREA TRANSITIONS
    ------------------------------------------------- */
 
-void enter_area(UINT8 new_area)
-{
+void enter_area(uint8_t new_area) {
     area = new_area;
 
     player_x = 9;
     player_y = 16;
-
     steps = 0;
 
     draw_map();
 
-    cls();
-
-    printf("\n%s", area_name());
-
-    if(area == MEADOW)
-        printf("\n\nThe wind moves through the grass.");
-
-    if(area == FOREST)
-        printf("\n\nThe trees swallow the sunlight.");
-
-    if(area == MINE)
-        printf("\n\nSomething drips in the darkness.");
-
-    if(area == RUINS)
-        printf("\n\nThe stones feel strangely warm.");
-
-    if(area == SHRINE)
-        printf("\n\nA pale light waits ahead.");
-
-    pause_text();
+    message(
+        area_name(),
+        "A new path lies ahead."
+    );
 
     draw_map();
 }
@@ -634,18 +459,17 @@ void enter_area(UINT8 new_area)
    STORY
    ------------------------------------------------- */
 
-void mara(void)
-{
-    if(story == 0)
-    {
+void story_event(void) {
+    if(area == VILLAGE && story == 0) {
+
         message(
             "OLD MARA",
-            "The meadow has been quiet for weeks."
+            "The meadow has been quiet."
         );
 
         message(
             "OLD MARA",
-            "Now it whispers after sunset."
+            "Now it whispers at night."
         );
 
         message(
@@ -655,122 +479,104 @@ void mara(void)
 
         story = 1;
     }
-    else
-    {
+
+    else if(area == FOREST && story == 1) {
+
         message(
-            "OLD MARA",
-            "The path beyond the forest leads underground."
+            "WHISPER FOREST",
+            "Something moves beyond the trees."
         );
+
+        message(
+            "WHISPER FOREST",
+            "The northern path opens."
+        );
+
+        story = 2;
     }
-}
 
-void sign_message(void)
-{
-    if(area == VILLAGE)
-        message("SIGN","MEADOW -> SOUTH");
+    else if(area == MINE && story == 2) {
 
-    else if(area == MEADOW)
-        message("SIGN","FOREST -> NORTH");
+        message(
+            "OLD MINE",
+            "The tunnel descends deeper."
+        );
 
-    else if(area == FOREST)
-        message("SIGN","OLD MINE -> NORTH");
+        story = 3;
+    }
 
-    else if(area == MINE)
-        message("SIGN","RUINS -> NORTH");
+    else if(area == RUINS && story == 3) {
 
-    else if(area == RUINS)
-        message("SIGN","SHRINE -> NORTH");
+        message(
+            "SUNKEN RUINS",
+            "Ancient symbols cover the walls."
+        );
 
-    else
-        message("STONE","THE WILD REMEMBERS.");
+        message(
+            "SUNKEN RUINS",
+            "Something answers below."
+        );
+
+        story = 4;
+    }
 }
 
 /* -------------------------------------------------
-   ENCOUNTERS
+   WILD ENCOUNTERS
    ------------------------------------------------- */
 
-UINT8 wild_for_area(void)
-{
+uint8_t wild_monster(void) {
     if(area == MEADOW)
-    {
-        if((steps & 7) == 0)
-            return 5;
-
-        if((steps & 3) == 0)
-            return 4;
-
-        return 3;
-    }
+        return (steps & 1) ? 3 : 4;
 
     if(area == FOREST)
-    {
-        if((steps & 7) == 0)
-            return 9;
-
-        if((steps & 3) == 0)
-            return 8;
-
-        return 6;
-    }
+        return (steps & 1) ? 6 : 8;
 
     if(area == MINE)
-    {
-        if((steps & 3) == 0)
-            return 10;
-
-        return 5;
-    }
+        return (steps & 1) ? 5 : 10;
 
     if(area == RUINS)
-    {
-        if((steps & 3) == 0)
-            return 11;
-
-        return 9;
-    }
+        return (steps & 1) ? 9 : 11;
 
     return 3;
 }
 
-UINT8 encounter_allowed(void)
-{
+uint8_t can_encounter(void) {
     if(area == VILLAGE)
         return 0;
 
     if(area == SHRINE)
         return 0;
 
-    if(area == MEADOW || area == FOREST)
-    {
-        if(tile_at(player_x,player_y) != TILE_TALL)
-            return 0;
-    }
+    if(
+        (area == MEADOW || area == FOREST) &&
+        tile_at(player_x,player_y) != TALL
+    )
+        return 0;
 
     return 1;
 }
 
 /* -------------------------------------------------
-   BATTLE
+   BATTLE DAMAGE
    ------------------------------------------------- */
 
-UINT8 calculate_damage(
+uint8_t damage_calc(
     Monster *attacker,
     Monster *defender,
-    UINT8 move
-)
-{
-    UINT16 damage;
+    uint8_t move
+) {
+    uint16_t damage;
 
     if(move == MOVE_GUARD)
         return 0;
 
     damage =
         attacker->atk +
-        move_data[move].power;
+        moves[move].power +
+        attacker->level;
 
-    damage += attacker->level;
-
-    if(defender->def < damage)
+    if(damage > defender->def)
         damage -= defender->def / 2;
     else
         damage = 1;
@@ -778,16 +584,23 @@ UINT8 calculate_damage(
     if(damage > 255)
         damage = 255;
 
-    return (UINT8)damage;
+    return (uint8_t)damage;
 }
 
-void battle_screen(Monster *enemy)
-{
-    cls();
+/* -------------------------------------------------
+   BATTLE UI
+   ------------------------------------------------- */
+
+void battle_status(Monster *enemy) {
+    clear_screen();
 
     printf(
-        "\nWILD %s LV%u",
-        enemy->name,
+        "\nWILD %s",
+        enemy->name
+    );
+
+    printf(
+        "\nLV %u",
         enemy->level
     );
 
@@ -798,64 +611,75 @@ void battle_screen(Monster *enemy)
     );
 
     printf(
-        "\n\n%s LV%u",
-        lead_monster()->name,
-        lead_monster()->level
+        "\n\n%s",
+        lead()->name
+    );
+
+    printf(
+        "\nLV %u",
+        lead()->level
     );
 
     printf(
         "\nHP %u/%u",
         battle_player_hp,
-        lead_monster()->max_hp
+        lead()->max_hp
     );
 }
 
-UINT8 battle_menu(void)
-{
-    UINT8 key;
+uint8_t battle_menu(void) {
+    uint8_t key;
 
-    while(1)
-    {
-        printf("\n\nA ATTACK");
-        printf("\nUP ITEM");
-        printf("\nDOWN BALL");
-        printf("\nB RUN");
+    clear_screen();
 
-        key = waitpad(
-            J_A |
-            J_B |
-            J_UP |
-            J_DOWN
-        );
+    printf("\nA ATTACK");
+    printf("\nUP POTION");
+    printf("\nDOWN BALL");
+    printf("\nB RUN");
 
-        waitpadup();
+    while(1) {
 
-        if(key & J_A)
+        key = joypad();
+
+        if(key & J_A) {
+            waitpadup();
             return 0;
+        }
 
-        if(key & J_UP)
+        if(key & J_UP) {
+            waitpadup();
             return 1;
+        }
 
-        if(key & J_DOWN)
+        if(key & J_DOWN) {
+            waitpadup();
             return 2;
+        }
 
-        if(key & J_B)
+        if(key & J_B) {
+            waitpadup();
             return 3;
+        }
+
+        vsync();
     }
 }
 
-void enemy_attack(Monster *enemy)
-{
-    UINT8 damage;
+/* -------------------------------------------------
+   BATTLE ACTIONS
+   ------------------------------------------------- */
 
-    damage = calculate_damage(
-        enemy,
-        lead_monster(),
-        enemy->move1
-    );
+void enemy_attack(Monster *enemy) {
+    uint8_t damage;
 
-    if(guarding)
-    {
+    damage =
+        damage_calc(
+            enemy,
+            lead(),
+            enemy->move1
+        );
+
+    if(guarding) {
         damage >>= 1;
         guarding = 0;
     }
@@ -866,42 +690,45 @@ void enemy_attack(Monster *enemy)
         battle_player_hp -= damage;
 }
 
-UINT8 try_capture(void)
-{
-    UINT8 chance;
+uint8_t capture_attempt(void) {
+    uint8_t chance;
 
     if(!balls)
         return 0;
 
     balls--;
 
-    chance = 35;
-
-    if(battle_enemy_hp <
-       monsters[battle_enemy].max_hp / 2)
-        chance = 65;
+    chance = 25;
 
     if(
-        (UINT8)(
-            steps +
-            player_x +
-            player_y +
-            battle_enemy * 7
-        ) < chance
+        battle_enemy_hp <
+        mons[battle_enemy].max_hp / 2
+    )
+        chance = 60;
+
+    /*
+       Deterministic pseudo-random behaviour.
+       Good enough for a tiny GB prototype.
+    */
+    if(
+        (steps +
+         player_x +
+         player_y +
+         battle_enemy * 7) % 100
+        < chance
     )
         return 1;
 
     return 0;
 }
 
-void catch_monster(void)
-{
-    Monster *m = &monsters[battle_enemy];
+void capture_enemy(void) {
+    Monster *m = &mons[battle_enemy];
 
     m->owned = 1;
 
-    if(party_count < PARTY_SIZE)
-    {
+    if(party_count < PARTY_SIZE) {
+
         party[party_count] = battle_enemy;
         party_count++;
 
@@ -910,8 +737,7 @@ void catch_monster(void)
             m->name
         );
     }
-    else
-    {
+    else {
         message(
             "CAUGHT!",
             "Your party is full."
@@ -919,17 +745,15 @@ void catch_monster(void)
     }
 }
 
-void win_battle(void)
-{
-    UINT8 xp;
+void battle_win(void) {
+    uint8_t xp =
+        mons[battle_enemy].level + 3;
 
-    xp = monsters[battle_enemy].level + 3;
-
-    cls();
+    clear_screen();
 
     printf(
-        "\n%s defeated!",
-        monsters[battle_enemy].name
+        "\n%s DEFEATED!",
+        mons[battle_enemy].name
     );
 
     printf(
@@ -939,22 +763,20 @@ void win_battle(void)
 
     pause_text();
 
-    add_xp(xp);
+    give_xp(xp);
 
     draw_map();
 }
 
-void lose_battle(void)
-{
+void battle_lose(void) {
     message(
         "FENLO FAINTED",
         "You return to Bramblewick."
     );
 
-    heal_lead();
+    heal_party();
 
     area = VILLAGE;
-
     player_x = 9;
     player_y = 15;
 
@@ -962,38 +784,37 @@ void lose_battle(void)
 }
 
 /* -------------------------------------------------
-   FULL BATTLE LOOP
+   BATTLE LOOP
    ------------------------------------------------- */
 
-void battle(void)
-{
+void battle(void) {
     Monster *enemy;
-    UINT8 option;
-    UINT8 move;
-    UINT8 damage;
+    uint8_t option;
+    uint8_t move;
+    uint8_t damage;
 
-    battle_enemy = wild_for_area();
+    enemy =
+        &mons[battle_enemy];
 
-    enemy = &monsters[battle_enemy];
-
-    battle_enemy_hp = enemy->max_hp;
+    battle_enemy_hp =
+        enemy->max_hp;
 
     battle_player_hp =
-        lead_monster()->hp;
+        lead()->hp;
 
     guarding = 0;
 
-    while(1)
-    {
-        battle_screen(enemy);
+    while(1) {
+
+        battle_status(enemy);
 
         option = battle_menu();
 
         /* RUN */
-        if(option == 3)
-        {
+        if(option == 3) {
+
             message(
-                "ESCAPE",
+                "ESCAPED",
                 "You got away."
             );
 
@@ -1001,43 +822,43 @@ void battle(void)
             return;
         }
 
-        /* ITEM */
-        if(option == 1)
-        {
-            if(potions)
-            {
-                potions--;
+        /* POTION */
+        if(option == 1) {
 
-                battle_player_hp += 8;
+            if(!potions) {
 
-                if(
-                    battle_player_hp >
-                    lead_monster()->max_hp
-                )
-                    battle_player_hp =
-                        lead_monster()->max_hp;
-
-                message(
-                    "POTION",
-                    "Your wild recovered."
-                );
-            }
-            else
-            {
                 message(
                     "BAG",
                     "No potions."
                 );
+
+                continue;
             }
+
+            potions--;
+
+            battle_player_hp += 8;
+
+            if(
+                battle_player_hp >
+                lead()->max_hp
+            )
+                battle_player_hp =
+                    lead()->max_hp;
+
+            message(
+                "POTION",
+                "HP restored."
+            );
 
             enemy_attack(enemy);
         }
 
         /* BALL */
-        else if(option == 2)
-        {
-            if(!balls)
-            {
+        else if(option == 2) {
+
+            if(!balls) {
+
                 message(
                     "BAG",
                     "No wild balls."
@@ -1046,31 +867,34 @@ void battle(void)
                 continue;
             }
 
-            if(try_capture())
-            {
-                catch_monster();
+            if(capture_attempt()) {
+
+                capture_enemy();
+
                 draw_map();
                 return;
             }
 
             message(
                 "WILD BALL",
-                "The wild broke free!"
+                "It broke free!"
             );
 
             enemy_attack(enemy);
         }
 
         /* ATTACK */
-        else
-        {
-            move = lead_monster()->move1;
+        else {
 
-            if((steps & 3) == 0)
-                move = lead_monster()->move2;
+            move = lead()->move1;
 
-            if(move == MOVE_GUARD)
-            {
+            if(
+                (steps & 3) == 0
+            )
+                move = lead()->move2;
+
+            if(move == MOVE_GUARD) {
+
                 guarding = 1;
 
                 message(
@@ -1078,11 +902,12 @@ void battle(void)
                     "You brace yourself."
                 );
             }
-            else
-            {
+
+            else {
+
                 damage =
-                    calculate_damage(
-                        lead_monster(),
+                    damage_calc(
+                        lead(),
                         enemy,
                         move
                     );
@@ -1092,140 +917,40 @@ void battle(void)
                 else
                     battle_enemy_hp -= damage;
 
-                cls();
+                clear_screen();
 
                 printf(
-                    "\n%s used %s!",
-                    lead_monster()->name,
-                    move_data[move].name
+                    "\n%s used",
+                    lead()->name
                 );
 
                 printf(
-                    "\n\nEnemy HP: %u",
+                    "\n%s!",
+                    moves[move].name
+                );
+
+                printf(
+                    "\n\nENEMY HP %u",
                     battle_enemy_hp
                 );
 
                 pause_text();
             }
 
-            if(battle_enemy_hp == 0)
-            {
-                win_battle();
+            if(battle_enemy_hp == 0) {
+
+                battle_win();
                 return;
             }
 
             enemy_attack(enemy);
         }
 
-        if(battle_player_hp == 0)
-        {
-            lose_battle();
+        if(battle_player_hp == 0) {
+
+            battle_lose();
             return;
         }
-    }
-}
-
-/* -------------------------------------------------
-   SPECIAL EVENTS
-   ------------------------------------------------- */
-
-void forest_event(void)
-{
-    if(story >= 2)
-        return;
-
-    story = 2;
-
-    message(
-        "THE FOREST",
-        "Something large moves between the trees."
-    );
-
-    message(
-        "THE FOREST",
-        "The path north is open."
-    );
-}
-
-void mine_event(void)
-{
-    if(story >= 3)
-        return;
-
-    story = 3;
-
-    message(
-        "OLD MINE",
-        "The tunnels continue beneath the earth."
-    );
-}
-
-void ruins_event(void)
-{
-    if(story >= 4)
-        return;
-
-    story = 4;
-
-    message(
-        "SUNken RUINS",
-        "A familiar symbol is carved into the stone."
-    );
-
-    message(
-        "SUNken RUINS",
-        "Something answers from below."
-    );
-}
-
-void shrine_event(void)
-{
-    if(story < 4)
-    {
-        message(
-            "SHRINE",
-            "The entrance is sealed."
-        );
-
-        return;
-    }
-
-    message(
-        "ECHO SHRINE",
-        "The air becomes completely still."
-    );
-
-    message(
-        "ECHO SHRINE",
-        "Something awakens."
-    );
-
-    /*
-       Force the final monster instead of using
-       the normal random encounter.
-    */
-
-    battle_enemy = 11;
-
-    battle_enemy_hp =
-        monsters[11].max_hp;
-
-    battle_player_hp =
-        lead_monster()->max_hp;
-
-    battle();
-
-    if(monsters[11].hp)
-    {
-        message(
-            "THE ECHO",
-            "The shrine falls silent."
-        );
-
-        message(
-            "LITTLE WILDS",
-            "You completed the journey."
-        );
     }
 }
 
@@ -1233,51 +958,52 @@ void shrine_event(void)
    INTERACTION
    ------------------------------------------------- */
 
-void interact(void)
-{
-    UINT8 tile;
+void interact(void) {
 
-    tile = tile_at(
-        player_x,
-        player_y
-    );
+    if(area == VILLAGE) {
 
-    if(area == VILLAGE)
-    {
-        if(
-            player_x >= 5 &&
-            player_x <= 7 &&
-            player_y >= 2 &&
-            player_y <= 4
-        )
-        {
-            mara();
+        story_event();
+        return;
+    }
+
+    if(area == SHRINE) {
+
+        if(story < 4) {
+
+            message(
+                "SHRINE",
+                "The entrance is sealed."
+            );
+
             return;
         }
 
-        sign_message();
-        return;
-    }
+        message(
+            "ECHO SHRINE",
+            "Something awakens."
+        );
 
-    if(area == SHRINE)
-    {
-        shrine_event();
-        return;
-    }
+        battle_enemy = 11;
 
-    if(tile == TILE_SIGN)
-    {
-        sign_message();
+        battle();
+
+        message(
+            "THE ECHO",
+            "The shrine falls silent."
+        );
+
         return;
     }
 
     if(
-        tile == TILE_TALL ||
-        area == MINE ||
-        area == RUINS
-    )
-    {
-        battle();
+        tile_at(player_x,player_y) == SIGN
+    ) {
+
+        message(
+            area_name(),
+            "The path continues north."
+        );
+
         return;
     }
 
@@ -1288,11 +1014,11 @@ void interact(void)
 }
 
 /* -------------------------------------------------
-   MOVEMENT
+   EXITS
    ------------------------------------------------- */
 
-void check_exit(void)
-{
+void check_exit(void) {
+
     if(
         player_y != 17 ||
         (player_x != 9 &&
@@ -1304,25 +1030,29 @@ void check_exit(void)
         enter_area(MEADOW);
 
     else if(area == MEADOW)
-        enter_area(VILLAGE);
-
-    else if(area == FOREST)
-        enter_area(MEADOW);
-
-    else if(area == MINE)
         enter_area(FOREST);
 
-    else if(area == RUINS)
+    else if(area == FOREST)
         enter_area(MINE);
+
+    else if(area == MINE)
+        enter_area(RUINS);
+
+    else if(area == RUINS)
+        enter_area(SHRINE);
 
     else if(area == SHRINE)
         enter_area(RUINS);
 }
 
-void move_player(UINT8 direction)
-{
-    UINT8 nx = player_x;
-    UINT8 ny = player_y;
+/* -------------------------------------------------
+   MOVEMENT
+   ------------------------------------------------- */
+
+void move_player(uint8_t direction) {
+
+    uint8_t nx = player_x;
+    uint8_t ny = player_y;
 
     if(direction == 0 && ny > 0)
         ny--;
@@ -1346,26 +1076,27 @@ void move_player(UINT8 direction)
     player_x = nx;
     player_y = ny;
 
-    show_player();
+    draw_player();
 
     check_exit();
 
-    if(area == FOREST)
-        forest_event();
+    story_event();
 
-    if(area == MINE)
-        mine_event();
+    if(can_encounter()) {
 
-    if(area == RUINS)
-        ruins_event();
-
-    if(encounter_allowed())
-    {
         steps++;
 
-        if(steps >= 4)
-        {
+        /*
+           Encounter roughly every few
+           steps while standing in tall grass.
+        */
+        if(steps >= 5) {
+
             steps = 0;
+
+            battle_enemy =
+                wild_monster();
+
             battle();
         }
     }
@@ -1375,19 +1106,19 @@ void move_player(UINT8 direction)
    PARTY SCREEN
    ------------------------------------------------- */
 
-void party_screen(void)
-{
-    UINT8 i;
+void party_screen(void) {
 
-    cls();
+    uint8_t i;
 
-    printf("\nPARTY\n");
-    printf("----------------");
+    clear_screen();
 
-    for(i = 0; i < party_count; i++)
-    {
+    printf("\nPARTY");
+    printf("\n----------------");
+
+    for(i=0;i<party_count;i++) {
+
         Monster *m =
-            &monsters[party[i]];
+            &mons[party[i]];
 
         printf(
             "\n\n%u %s",
@@ -1405,11 +1136,6 @@ void party_screen(void)
             m->hp,
             m->max_hp
         );
-
-        printf(
-            "\nXP %u",
-            m->xp
-        );
     }
 
     pause_text();
@@ -1421,55 +1147,63 @@ void party_screen(void)
    BAG
    ------------------------------------------------- */
 
-void bag(void)
-{
-    UINT8 key;
+void bag(void) {
 
-    while(1)
-    {
-        cls();
+    uint8_t key;
+
+    while(1) {
+
+        clear_screen();
 
         printf("\nBAG");
         printf("\n----------------");
 
-        printf("\nPOTION  x%u",potions);
-        printf("\nBALL    x%u",balls);
-        printf("\nHERB    x%u",herbs);
+        printf("\nPOTION x%u",potions);
+        printf("\nBALL   x%u",balls);
 
         printf("\n\nA HEAL");
         printf("\nB BACK");
 
-        key =
-            waitpad(J_A | J_B);
+        while(1) {
 
-        waitpadup();
+            key = joypad();
 
-        if(key & J_B)
-        {
-            draw_map();
-            return;
-        }
+            if(key & J_A) {
 
-        if(key & J_A)
-        {
-            if(potions)
-            {
-                potions--;
+                waitpadup();
 
-                heal_lead();
+                if(potions) {
 
-                message(
-                    "POTION",
-                    "Fenlo is fully healed."
-                );
+                    potions--;
+
+                    heal_party();
+
+                    message(
+                        "POTION",
+                        "Your party is healed."
+                    );
+                }
+
+                else {
+
+                    message(
+                        "BAG",
+                        "No potions."
+                    );
+                }
+
+                break;
             }
-            else
-            {
-                message(
-                    "BAG",
-                    "No potions."
-                );
+
+            if(key & J_B) {
+
+                waitpadup();
+
+                draw_map();
+                return;
             }
+
+            vsync();
         }
     }
 }
@@ -1478,12 +1212,11 @@ void bag(void)
    STATUS
    ------------------------------------------------- */
 
-void status_screen(void)
-{
-    Monster *m =
-        lead_monster();
+void status_screen(void) {
 
-    cls();
+    Monster *m = lead();
+
+    clear_screen();
 
     printf("\nLITTLE WILDS");
     printf("\n----------------");
@@ -1525,9 +1258,9 @@ void status_screen(void)
     );
 
     printf(
-        "\n\nCAUGHT %u/%u",
+        "\n\nPARTY %u/%u",
         party_count,
-        MAX_MONSTERS
+        PARTY_SIZE
     );
 
     pause_text();
@@ -1536,58 +1269,56 @@ void status_screen(void)
 }
 
 /* -------------------------------------------------
-   MAIN MENU
+   MENU
    ------------------------------------------------- */
 
-void menu(void)
-{
-    UINT8 key;
+void menu(void) {
 
-    while(1)
-    {
-        cls();
+    uint8_t key;
 
-        printf("\nMENU");
-        printf("\n----------------");
+    clear_screen();
 
-        printf("\nA BAG");
-        printf("\nUP PARTY");
-        printf("\nDOWN STATUS");
-        printf("\nB CLOSE");
+    printf("\nMENU");
+    printf("\n----------------");
 
-        key =
-            waitpad(
-                J_A |
-                J_B |
-                J_UP |
-                J_DOWN
-            );
+    printf("\nA BAG");
+    printf("\nUP PARTY");
+    printf("\nDOWN STATUS");
+    printf("\nB CLOSE");
 
-        waitpadup();
+    while(1) {
 
-        if(key & J_B)
-        {
-            draw_map();
-            return;
-        }
+        key = joypad();
 
-        if(key & J_A)
-        {
+        if(key & J_A) {
+
+            waitpadup();
             bag();
             return;
         }
 
-        if(key & J_UP)
-        {
+        if(key & J_UP) {
+
+            waitpadup();
             party_screen();
             return;
         }
 
-        if(key & J_DOWN)
-        {
+        if(key & J_DOWN) {
+
+            waitpadup();
             status_screen();
             return;
         }
+
+        if(key & J_B) {
+
+            waitpadup();
+            draw_map();
+            return;
+        }
+
+        vsync();
     }
 }
 
@@ -1595,19 +1326,16 @@ void menu(void)
    INTRO
    ------------------------------------------------- */
 
-void intro(void)
-{
-    cls();
+void intro(void) {
 
-    printf("\n\n");
-    printf(" LITTLE WILDS");
+    clear_screen();
 
-    printf("\n\n");
-    printf(" THE MEADOW");
-    printf(" OF ECHOES");
+    printf("\n\nLITTLE WILDS");
 
-    printf("\n\n");
-    printf(" A: START");
+    printf("\n\nA TINY");
+    printf("\nMONSTER RPG");
+
+    printf("\n\nPRESS A");
 
     wait_a();
 
@@ -1618,7 +1346,7 @@ void intro(void)
 
     message(
         "YOU",
-        "Something feels different today."
+        "Something feels different."
     );
 
     message(
@@ -1631,9 +1359,9 @@ void intro(void)
    INITIALIZATION
    ------------------------------------------------- */
 
-void initialize(void)
-{
-    UINT8 i;
+void initialize(void) {
+
+    uint8_t i;
 
     area = VILLAGE;
 
@@ -1641,7 +1369,7 @@ void initialize(void)
     player_y = 15;
 
     story = 0;
-    flags = 0;
+    steps = 0;
 
     party[0] = 0;
     party[1] = 255;
@@ -1651,119 +1379,26 @@ void initialize(void)
 
     potions = 3;
     balls = 6;
-    herbs = 2;
 
-    steps = 0;
+    for(i=0;i<MAX_MONSTERS;i++)
+        mons[i].owned = 0;
 
-    for(i = 0; i < MAX_MONSTERS; i++)
-        monsters[i].owned = 0;
+    mons[0].owned = 1;
 
-    monsters[0].owned = 1;
-
-    heal_lead();
-}
-
-/* -------------------------------------------------
-   GRAPHICS
-   ------------------------------------------------- */
-
-void initialize_graphics(void)
-{
-    set_bkg_data(
-        0,
-        11,
-        tiles
-    );
-
-    set_sprite_data(
-        0,
-        1,
-        player_sprite
-    );
-
-    set_sprite_data(
-        1,
-        1,
-        npc_sprite
-    );
-
-    set_sprite_tile(
-        0,
-        0
-    );
-
-    set_sprite_tile(
-        1,
-        1
-    );
-}
-
-/* -------------------------------------------------
-   OVERWORLD
-   ------------------------------------------------- */
-
-void overworld(void)
-{
-    UINT8 key;
-
-    while(1)
-    {
-        key = joypad();
-
-        if(key & J_UP)
-        {
-            move_player(0);
-            waitpadup();
-        }
-
-        else if(key & J_DOWN)
-        {
-            move_player(1);
-            waitpadup();
-        }
-
-        else if(key & J_LEFT)
-        {
-            move_player(2);
-            waitpadup();
-        }
-
-        else if(key & J_RIGHT)
-        {
-            move_player(3);
-            waitpadup();
-        }
-
-        else if(key & J_A)
-        {
-            waitpadup();
-            interact();
-        }
-
-        else if(key & J_B)
-        {
-            waitpadup();
-            menu();
-        }
-
-        vsync();
-    }
+    heal_party();
 }
 
 /* -------------------------------------------------
    MAIN
    ------------------------------------------------- */
 
-void main(void)
-{
+void main(void) {
+
     DISPLAY_OFF;
 
     initialize();
 
-    initialize_graphics();
-
-    SHOW_BKG;
-    SHOW_SPRITES;
+    graphics_init();
 
     intro();
 
@@ -1771,5 +1406,47 @@ void main(void)
 
     DISPLAY_ON;
 
-    overworld();
+    while(1) {
+
+        uint8_t key =
+            joypad();
+
+        if(key & J_UP) {
+
+            move_player(0);
+            waitpadup();
+        }
+
+        else if(key & J_DOWN) {
+
+            move_player(1);
+            waitpadup();
+        }
+
+        else if(key & J_LEFT) {
+
+            move_player(2);
+            waitpadup();
+        }
+
+        else if(key & J_RIGHT) {
+
+            move_player(3);
+            waitpadup();
+        }
+
+        else if(key & J_A) {
+
+            waitpadup();
+            interact();
+        }
+
+        else if(key & J_B) {
+
+            waitpadup();
+            menu();
+        }
+
+        vsync();
+    }
 }
